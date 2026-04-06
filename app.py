@@ -29,8 +29,8 @@ df = pd.DataFrame(articles)
 col1, col2, col3, col4, col5, col6 = st.columns(6)
 
 total = len(df)
-live = len(df[df["status"] == "live"]) if not df.empty else 0
-writing = len(df[df["status"] == "writing"]) if not df.empty else 0
+published = len(df[df["content_status"].isin(["published", "new_published"])]) if not df.empty else 0
+writing = len(df[df["content_status"] == "writing"]) if not df.empty else 0
 
 # Avg position from latest rankings
 if rankings:
@@ -53,7 +53,7 @@ else:
     total_impressions = 0
 
 col1.metric("Total Articles", total)
-col2.metric("Live", live)
+col2.metric("Published", published)
 col3.metric("Writing", writing)
 col4.metric("Avg Position", f"{avg_pos:.1f}" if avg_pos else "—")
 col5.metric("Clicks (month)", f"{total_clicks:,}")
@@ -66,9 +66,10 @@ st.subheader("Articles")
 
 fcol1, fcol2, fcol3 = st.columns(3)
 with fcol1:
+    all_statuses = sorted(df["content_status"].dropna().unique()) if not df.empty else []
     status_filter = st.multiselect(
-        "Status", options=["live", "writing", "auditing", "unknown"],
-        default=["live", "writing", "auditing"],
+        "Status", options=all_statuses,
+        default=[s for s in ["published", "new_published", "writing"] if s in all_statuses],
     )
 with fcol2:
     clusters = sorted(df["topic_cluster"].dropna().unique()) if not df.empty else []
@@ -86,7 +87,7 @@ for f in flags:
 
 # --- Build display table ---
 if not df.empty:
-    filtered = df[df["status"].isin(status_filter)].copy()
+    filtered = df[df["content_status"].isin(status_filter)].copy()
     if cluster_filter:
         filtered = filtered[filtered["topic_cluster"].isin(cluster_filter)]
     if search:
@@ -113,7 +114,7 @@ if not df.empty:
 
     # Select display columns
     display_cols = [
-        "main_keyword", "url", "status", "topic_cluster",
+        "main_keyword", "url", "content_status", "topic_cluster",
         "search_volume", "current_rank", "published_at", "flags",
     ]
     display_cols = [c for c in display_cols if c in filtered.columns]
@@ -127,7 +128,7 @@ if not df.empty:
     display = display.rename(columns={
         "main_keyword": "Keyword",
         "url": "URL",
-        "status": "Status",
+        "content_status": "Status",
         "topic_cluster": "Cluster",
         "search_volume": "Volume",
         "current_rank": "Rank",

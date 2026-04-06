@@ -22,10 +22,10 @@ adf = pd.DataFrame(articles) if articles else pd.DataFrame()
 
 # --- Flag descriptions ---
 FLAG_DESCRIPTIONS = {
-    "needs_content_update": "Live > 5 months without content update on Ghost",
-    "ranking_drop": "Position dropped > 15 vs previous week",
-    "low_ctr": "Impressions > 500 but CTR < 2%",
-    "not_ranking": "Published > 8 weeks, never entered top 100",
+    "stale": "Published > 5 months without content update on Ghost",
+    "declining": "Position dropped > 15 vs previous week",
+    "low_visibility": "Impressions > 500 but CTR < 2%",
+    "invisible": "Published > 8 weeks, never entered top 100",
     "post_audit_check": "4 weeks after audit — check ranking impact",
 }
 
@@ -50,7 +50,7 @@ filtered = fdf[fdf["flag"].isin(selected_flags)].copy()
 # Merge with article info
 if not adf.empty:
     filtered = filtered.merge(
-        adf[["url", "main_keyword", "status", "topic_cluster", "person_in_charge"]],
+        adf[["url", "main_keyword", "content_status", "topic_cluster", "person_in_charge"]],
         on="url",
         how="left",
         suffixes=("", "_article"),
@@ -75,8 +75,8 @@ for flag_type in selected_flags:
     st.caption(FLAG_DESCRIPTIONS.get(flag_type, ""))
 
     display_cols = ["main_keyword", "url", "detail"]
-    if "status" in group.columns:
-        display_cols.append("status")
+    if "content_status" in group.columns:
+        display_cols.append("content_status")
     if "person_in_charge" in group.columns:
         display_cols.append("person_in_charge")
 
@@ -86,7 +86,7 @@ for flag_type in selected_flags:
         "main_keyword": "Keyword",
         "url": "URL",
         "detail": "Detail",
-        "status": "Status",
+        "content_status": "Status",
         "person_in_charge": "Owner",
     })
 

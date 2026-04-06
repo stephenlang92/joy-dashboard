@@ -30,7 +30,7 @@ article = df.iloc[selected_idx]
 
 # --- Article info ---
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Status", article.get("status", "—"))
+col1.metric("Status", article.get("content_status", "—"))
 col2.metric("Search Volume", article.get("search_volume") or "—")
 col3.metric("Topic Cluster", article.get("topic_cluster") or "—")
 col4.metric("Person", article.get("person_in_charge") or "—")

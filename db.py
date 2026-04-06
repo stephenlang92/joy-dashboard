@@ -79,7 +79,7 @@ def fetch_flags():
     articles = fetch_articles()
 
     for a in articles:
-        if a.get("status") != "live":
+        if a.get("content_status") not in ("published", "new_published"):
             continue
         url = a["url"]
 
@@ -90,7 +90,7 @@ def fetch_flags():
                 if (now - updated).days > 150:
                     flags.append({
                         "url": url,
-                        "flag": "needs_content_update",
+                        "flag": "stale",
                         "detail": f"Last updated {updated.strftime('%Y-%m-%d')}",
                         "main_keyword": a.get("main_keyword", ""),
                     })
@@ -104,7 +104,7 @@ def fetch_flags():
                 if (now - published).days > 56:
                     flags.append({
                         "url": url,
-                        "flag": "not_ranking",
+                        "flag": "invisible",
                         "detail": f"Published {published.strftime('%Y-%m-%d')}, never ranked",
                         "main_keyword": a.get("main_keyword", ""),
                     })
@@ -132,7 +132,7 @@ def fetch_flags():
                 a = articles_by_kw.get(kw, {})
                 flags.append({
                     "url": a.get("url", ""),
-                    "flag": "ranking_drop",
+                    "flag": "declining",
                     "detail": f"{kw}: {previous} → {current} (dropped {current - previous})",
                     "main_keyword": kw,
                 })
@@ -147,7 +147,7 @@ def fetch_flags():
             if g.get("impressions", 0) > 500 and g.get("ctr", 1) < 0.02:
                 flags.append({
                     "url": g["url"],
-                    "flag": "low_ctr",
+                    "flag": "low_visibility",
                     "detail": f"Impressions: {g['impressions']}, CTR: {g['ctr']:.1%}",
                     "main_keyword": "",
                 })
