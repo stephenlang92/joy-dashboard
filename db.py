@@ -69,12 +69,7 @@ def fetch_articles_enriched():
 @st.cache_data(ttl=300)
 def fetch_gsc_monthly():
     sb = get_supabase()
-    data = sb.table("gsc_monthly").select("*").order("month,url").execute().data
-    # Normalize URLs: ensure trailing slash for consistent matching
-    for row in data:
-        if row.get("url") and not row["url"].endswith("/"):
-            row["url"] = row["url"] + "/"
-    return data
+    return sb.table("gsc_monthly").select("*").order("month,url").execute().data
 
 
 @st.cache_data(ttl=300)
