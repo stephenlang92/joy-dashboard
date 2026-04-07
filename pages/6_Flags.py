@@ -4,14 +4,14 @@ Flags — All flagged articles that need attention, filterable by flag type.
 
 import streamlit as st
 import pandas as pd
-from db import fetch_flags, fetch_articles
+from db import fetch_flags, fetch_articles_enriched
 
 st.set_page_config(page_title="Flags", page_icon="🚩", layout="wide")
 st.title("Flags")
 st.caption("Articles that need attention based on auto-detection rules")
 
 flags = fetch_flags()
-articles = fetch_articles()
+articles = fetch_articles_enriched()
 
 if not flags:
     st.success("No active flags! All articles are in good shape.")
@@ -47,18 +47,13 @@ selected_flags = st.multiselect(
 
 filtered = fdf[fdf["flag"].isin(selected_flags)].copy()
 
-# Merge with article info
-if not adf.empty:
+# Merge with article info via slug
+if not adf.empty and "slug" in filtered.columns:
     filtered = filtered.merge(
-        adf[["url", "main_keyword", "content_status", "topic_cluster", "person_in_charge"]],
-        on="url",
+        adf[["slug", "content_status", "topic_cluster", "person_in_charge"]],
+        on="slug",
         how="left",
-        suffixes=("", "_article"),
     )
-    # Prefer main_keyword from flags if available, else from articles
-    if "main_keyword_article" in filtered.columns:
-        filtered["main_keyword"] = filtered["main_keyword"].fillna(filtered["main_keyword_article"])
-        filtered = filtered.drop(columns=["main_keyword_article"])
 
 # --- Flag legend ---
 with st.expander("Flag definitions"):

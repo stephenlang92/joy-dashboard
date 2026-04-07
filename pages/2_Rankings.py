@@ -5,12 +5,12 @@ Rankings — Ranking trends by keyword/topic, best positions, days to rank.
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from db import fetch_articles, fetch_rankings
+from db import fetch_articles_enriched, fetch_rankings
 
 st.set_page_config(page_title="Rankings", page_icon="📈", layout="wide")
 st.title("Rankings")
 
-articles = fetch_articles()
+articles = fetch_articles_enriched()
 rankings = fetch_rankings()
 
 if not rankings:
@@ -41,14 +41,13 @@ st.subheader("Ranking Trends")
 
 valid = filtered[filtered["position"].notna()].copy()
 if not valid.empty:
-    # If many keywords, show top 10 by latest position
     latest_date = valid["check_date"].max()
     latest = valid[valid["check_date"] == latest_date].nsmallest(10, "position")
     top_kws = latest["main_keyword"].tolist()
 
     if not kw_filter:
         chart_data = valid[valid["main_keyword"].isin(top_kws)]
-        st.caption(f"Showing top 10 keywords by latest position. Use filter to select specific keywords.")
+        st.caption("Showing top 10 keywords by latest position. Use filter to select specific keywords.")
     else:
         chart_data = valid
 

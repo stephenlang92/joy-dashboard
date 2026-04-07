@@ -12,6 +12,10 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 
+def _extract_slug(url: str) -> str:
+    return url.rstrip("/").split("/")[-1]
+
+
 def get_supabase():
     """Get Supabase client (cached per session)."""
     try:
@@ -25,8 +29,41 @@ def get_supabase():
 
 @st.cache_data(ttl=300)
 def fetch_articles():
+    """Fetch articles table."""
     sb = get_supabase()
     return sb.table("articles").select("*").order("id").execute().data
+
+
+@st.cache_data(ttl=300)
+def fetch_keywords():
+    """Fetch keywords table (main + sub)."""
+    sb = get_supabase()
+    return sb.table("keywords").select("*").execute().data
+
+
+@st.cache_data(ttl=300)
+def fetch_articles_enriched():
+    """Fetch articles joined with main keyword and search_volume from keywords table."""
+    articles = fetch_articles()
+    keywords = fetch_keywords()
+
+    # Build lookup: slug → {keyword, search_volume}
+    kw_by_slug = {}
+    for kw in keywords:
+        if kw.get("type") == "main":
+            kw_by_slug[kw["article_slug"]] = {
+                "main_keyword": kw["keyword"],
+                "search_volume": kw.get("search_volume"),
+            }
+
+    # Enrich articles
+    for a in articles:
+        slug = a.get("slug", "")
+        kw_info = kw_by_slug.get(slug, {})
+        a["main_keyword"] = kw_info.get("main_keyword", "")
+        a["search_volume"] = kw_info.get("search_volume")
+
+    return articles
 
 
 @st.cache_data(ttl=300)
@@ -38,7 +75,6 @@ def fetch_gsc_monthly():
 @st.cache_data(ttl=300)
 def fetch_rankings():
     sb = get_supabase()
-    # Fetch all rankings (may be large — paginate if needed)
     data = []
     offset = 0
     while True:
@@ -71,25 +107,26 @@ def fetch_backlink_events():
 
 @st.cache_data(ttl=300)
 def fetch_flags():
-    """Compute flags from articles + rankings + GSC data."""
-    from datetime import datetime, timedelta, timezone
+    """Compute health flags from articles + keywords + rankings + GSC data."""
+    from datetime import datetime, timezone
 
     flags = []
     now = datetime.now(timezone.utc)
-    articles = fetch_articles()
+    articles = fetch_articles_enriched()
 
     for a in articles:
         if a.get("content_status") not in ("published", "new_published"):
             continue
-        url = a["url"]
+        slug = a.get("slug", "")
 
-        # needs_content_update: >5 months since Ghost update
+        # stale: >5 months since Ghost update
         if a.get("updated_at"):
             try:
                 updated = datetime.fromisoformat(a["updated_at"].replace("Z", "+00:00"))
                 if (now - updated).days > 150:
                     flags.append({
-                        "url": url,
+                        "slug": slug,
+                        "url": a.get("url", ""),
                         "flag": "stale",
                         "detail": f"Last updated {updated.strftime('%Y-%m-%d')}",
                         "main_keyword": a.get("main_keyword", ""),
@@ -97,13 +134,14 @@ def fetch_flags():
             except Exception:
                 pass
 
-        # not_ranking: >8 weeks since publish, no top 100
+        # invisible: >8 weeks since publish, never ranked
         if a.get("published_at") and not a.get("first_ranked_date"):
             try:
                 published = datetime.fromisoformat(a["published_at"].replace("Z", "+00:00"))
                 if (now - published).days > 56:
                     flags.append({
-                        "url": url,
+                        "slug": slug,
+                        "url": a.get("url", ""),
                         "flag": "invisible",
                         "detail": f"Published {published.strftime('%Y-%m-%d')}, never ranked",
                         "main_keyword": a.get("main_keyword", ""),
@@ -111,7 +149,7 @@ def fetch_flags():
             except Exception:
                 pass
 
-    # ranking_drop: >15 positions vs last week
+    # declining: ranking drop > 15 vs last week
     rankings = fetch_rankings()
     by_keyword = {}
     for r in rankings:
@@ -123,7 +161,7 @@ def fetch_flags():
         if len(by_keyword[kw]) < 2:
             by_keyword[kw].append(r)
 
-    articles_by_kw = {a.get("main_keyword"): a for a in articles}
+    articles_by_kw = {a.get("main_keyword"): a for a in articles if a.get("main_keyword")}
     for kw, entries in by_keyword.items():
         if len(entries) == 2:
             current = entries[0]["position"]
@@ -131,13 +169,14 @@ def fetch_flags():
             if current - previous > 15:
                 a = articles_by_kw.get(kw, {})
                 flags.append({
+                    "slug": a.get("slug", ""),
                     "url": a.get("url", ""),
                     "flag": "declining",
                     "detail": f"{kw}: {previous} → {current} (dropped {current - previous})",
                     "main_keyword": kw,
                 })
 
-    # low_ctr: impressions > 500 + CTR < 2%
+    # low_visibility: impressions > 500 + CTR < 2%
     gsc = fetch_gsc_monthly()
     if gsc:
         latest_month = max(r["month"] for r in gsc)
@@ -145,7 +184,9 @@ def fetch_flags():
             if g["month"] != latest_month:
                 continue
             if g.get("impressions", 0) > 500 and g.get("ctr", 1) < 0.02:
+                slug = _extract_slug(g["url"]) if g.get("url") else ""
                 flags.append({
+                    "slug": slug,
                     "url": g["url"],
                     "flag": "low_visibility",
                     "detail": f"Impressions: {g['impressions']}, CTR: {g['ctr']:.1%}",
@@ -158,8 +199,10 @@ def fetch_flags():
         try:
             audit_date = datetime.strptime(audit["audit_date"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
             if 28 <= (now - audit_date).days <= 42:
+                slug = _extract_slug(audit["url"]) if audit.get("url") else ""
                 flags.append({
-                    "url": audit["url"],
+                    "slug": slug,
+                    "url": audit.get("url", ""),
                     "flag": "post_audit_check",
                     "detail": f"Audit on {audit['audit_date']} ({audit.get('audit_type', '')}), check ranking impact",
                     "main_keyword": "",

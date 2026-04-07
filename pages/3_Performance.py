@@ -6,13 +6,13 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from db import fetch_gsc_monthly, fetch_articles
+from db import fetch_gsc_monthly, fetch_articles_enriched
 
 st.set_page_config(page_title="Performance", page_icon="⚡", layout="wide")
 st.title("Performance")
 
 gsc = fetch_gsc_monthly()
-articles = fetch_articles()
+articles = fetch_articles_enriched()
 
 if not gsc:
     st.warning("No GSC data in database.")
@@ -73,16 +73,16 @@ st.subheader("Top Performers (Latest Month)")
 latest_gsc = gdf[gdf["month"] == latest_month].copy()
 latest_gsc = latest_gsc.sort_values("clicks", ascending=False)
 
-# Merge with articles for keyword info
 if not adf.empty:
-    merged = latest_gsc.merge(
-        adf[["url", "main_keyword", "topic_cluster"]],
-        on="url", how="left",
-    )
+    slug_kw = adf[["url", "main_keyword"]].dropna(subset=["url"]).copy()
+    merged = latest_gsc.merge(slug_kw, on="url", how="left")
 else:
     merged = latest_gsc.copy()
     merged["main_keyword"] = ""
-    merged["topic_cluster"] = ""
+
+merged["main_keyword"] = merged["main_keyword"].fillna(
+    merged["url"].apply(lambda u: u.rstrip("/").split("/")[-1] if u else "")
+)
 
 top20 = merged.head(20)
 fig = px.bar(
@@ -114,9 +114,9 @@ quick_wins = quick_wins.sort_values("impressions", ascending=False)
 
 if not quick_wins.empty:
     if not adf.empty:
-        quick_wins = quick_wins.merge(
-            adf[["url", "main_keyword"]],
-            on="url", how="left",
+        quick_wins = quick_wins.merge(adf[["url", "main_keyword"]], on="url", how="left")
+        quick_wins["main_keyword"] = quick_wins["main_keyword"].fillna(
+            quick_wins["url"].apply(lambda u: u.rstrip("/").split("/")[-1] if u else "")
         )
 
     fig = px.scatter(

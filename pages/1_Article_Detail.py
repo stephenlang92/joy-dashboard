@@ -7,12 +7,12 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from db import fetch_articles, fetch_rankings, fetch_gsc_monthly, fetch_audit_log, fetch_backlink_events
+from db import fetch_articles_enriched, fetch_rankings, fetch_gsc_monthly, fetch_audit_log, fetch_backlink_events
 
 st.set_page_config(page_title="Article Detail", page_icon="📄", layout="wide")
 st.title("Article Detail")
 
-articles = fetch_articles()
+articles = fetch_articles_enriched()
 if not articles:
     st.warning("No articles in database.")
     st.stop()
@@ -21,7 +21,7 @@ df = pd.DataFrame(articles)
 
 # --- Article selector ---
 options = df.apply(
-    lambda r: f"{r.get('main_keyword', '')} — {r.get('url', '')}",
+    lambda r: f"{r.get('main_keyword', '') or r.get('slug', '')} — {r.get('url', '')}",
     axis=1,
 ).tolist()
 
@@ -52,6 +52,8 @@ st.divider()
 # --- Ranking timeline ---
 st.subheader("Ranking Timeline")
 keyword = article.get("main_keyword")
+article_url = article.get("url", "")
+
 if keyword:
     rankings = fetch_rankings()
     rdf = pd.DataFrame(rankings)
@@ -74,7 +76,7 @@ if keyword:
 
         # Add audit markers
         audits = fetch_audit_log()
-        article_audits = [a for a in audits if a["url"] == article["url"]]
+        article_audits = [a for a in audits if a["url"] == article_url]
         for audit in article_audits:
             fig.add_vline(
                 x=audit["audit_date"],
@@ -85,7 +87,7 @@ if keyword:
 
         # Add backlink markers
         backlinks = fetch_backlink_events()
-        article_bls = [b for b in backlinks if b["target_url"] == article["url"]]
+        article_bls = [b for b in backlinks if b["target_url"] == article_url]
         for bl in article_bls:
             fig.add_vline(
                 x=bl["event_date"],
@@ -105,7 +107,7 @@ st.subheader("GSC Performance")
 gsc = fetch_gsc_monthly()
 if gsc:
     gdf = pd.DataFrame(gsc)
-    article_gsc = gdf[gdf["url"] == article["url"]].copy()
+    article_gsc = gdf[gdf["url"] == article_url].copy()
 
     if not article_gsc.empty:
         article_gsc = article_gsc.sort_values("month")
@@ -128,7 +130,6 @@ if gsc:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # GSC table
         display_gsc = article_gsc[["month", "clicks", "impressions", "ctr", "avg_position", "top_query"]].copy()
         display_gsc["ctr"] = display_gsc["ctr"].map(lambda x: f"{x:.1%}" if x else "—")
         st.dataframe(display_gsc, use_container_width=True, hide_index=True)
@@ -140,7 +141,7 @@ else:
 # --- Audit history ---
 st.subheader("Audit History")
 audits = fetch_audit_log()
-article_audits = [a for a in audits if a["url"] == article["url"]]
+article_audits = [a for a in audits if a["url"] == article_url]
 if article_audits:
     for a in article_audits:
         with st.expander(f"{a['audit_date']} — {a.get('audit_type', '')} (rank before: {a.get('ranking_before', '—')})"):
@@ -152,7 +153,7 @@ else:
 # --- Backlink events ---
 st.subheader("Backlink Events")
 backlinks = fetch_backlink_events()
-article_bls = [b for b in backlinks if b["target_url"] == article["url"]]
+article_bls = [b for b in backlinks if b["target_url"] == article_url]
 if article_bls:
     bl_df = pd.DataFrame(article_bls)[["event_date", "source_domain", "backlink_type", "notes"]]
     st.dataframe(bl_df, use_container_width=True, hide_index=True)

@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from db import fetch_backlink_events, fetch_rankings, fetch_articles
+from db import fetch_backlink_events, fetch_rankings, fetch_articles_enriched
 
 st.set_page_config(page_title="Backlink Impact", page_icon="🔗", layout="wide")
 st.title("Backlink Impact")
@@ -17,7 +17,7 @@ if not backlinks:
     st.stop()
 
 rankings = fetch_rankings()
-articles = fetch_articles()
+articles = fetch_articles_enriched()
 
 bl_df = pd.DataFrame(backlinks)
 rdf = pd.DataFrame(rankings) if rankings else pd.DataFrame()
@@ -28,7 +28,7 @@ results = []
 for _, bl in bl_df.iterrows():
     url = bl["target_url"]
     article = adf[adf["url"] == url]
-    keyword = article.iloc[0]["main_keyword"] if not article.empty else None
+    keyword = article.iloc[0]["main_keyword"] if not article.empty and article.iloc[0].get("main_keyword") else None
 
     ranking_before = None
     ranking_after = None
@@ -40,12 +40,10 @@ for _, bl in bl_df.iterrows():
             kw_ranks["check_date"] = pd.to_datetime(kw_ranks["check_date"])
             event_date = pd.to_datetime(bl["event_date"])
 
-            # Ranking before (closest before event)
             before = kw_ranks[kw_ranks["check_date"] <= event_date].sort_values("check_date", ascending=False)
             if not before.empty:
                 ranking_before = before.iloc[0]["position"]
 
-            # Ranking after (4 weeks after event)
             after_date = event_date + pd.Timedelta(weeks=4)
             after = kw_ranks[kw_ranks["check_date"] >= after_date].sort_values("check_date")
             if not after.empty:

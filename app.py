@@ -5,7 +5,7 @@ Overview page: KPI cards, articles table with flags and filters.
 
 import streamlit as st
 import pandas as pd
-from db import fetch_articles, fetch_gsc_monthly, fetch_rankings, fetch_flags
+from db import fetch_articles_enriched, fetch_gsc_monthly, fetch_rankings, fetch_flags
 
 st.set_page_config(
     page_title="Joy Content Database",
@@ -18,7 +18,7 @@ st.title("Joy Content Database")
 st.caption("Content performance dashboard for joy.so")
 
 # --- Load data ---
-articles = fetch_articles()
+articles = fetch_articles_enriched()
 gsc = fetch_gsc_monthly()
 rankings = fetch_rankings()
 flags = fetch_flags()
@@ -29,8 +29,11 @@ df = pd.DataFrame(articles)
 col1, col2, col3, col4, col5, col6 = st.columns(6)
 
 total = len(df)
-published = len(df[df["content_status"].isin(["published", "new_published"])]) if not df.empty else 0
-writing = len(df[df["content_status"] == "writing"]) if not df.empty else 0
+if not df.empty:
+    published = len(df[df["content_status"].isin(["published", "new_published"])])
+    writing = len(df[df["content_status"] == "writing"])
+else:
+    published = writing = 0
 
 # Avg position from latest rankings
 if rankings:
@@ -47,10 +50,9 @@ if gsc:
     latest_month = gdf["month"].max()
     month_data = gdf[gdf["month"] == latest_month]
     total_clicks = int(month_data["clicks"].sum())
-    total_impressions = int(month_data["impressions"].sum())
 else:
     total_clicks = 0
-    total_impressions = 0
+    latest_month = None
 
 col1.metric("Total Articles", total)
 col2.metric("Published", published)
@@ -78,12 +80,12 @@ with fcol3:
     search = st.text_input("Search keyword / URL")
 
 # --- Flag lookup ---
-flag_by_url = {}
+flag_by_slug = {}
 for f in flags:
-    url = f["url"]
-    if url not in flag_by_url:
-        flag_by_url[url] = []
-    flag_by_url[url].append(f["flag"])
+    s = f.get("slug", "")
+    if s not in flag_by_slug:
+        flag_by_slug[s] = []
+    flag_by_slug[s].append(f["flag"])
 
 # --- Build display table ---
 if not df.empty:
@@ -98,8 +100,8 @@ if not df.empty:
         ]
 
     # Add flags column
-    filtered["flags"] = filtered["url"].map(
-        lambda u: ", ".join(flag_by_url.get(u, [])) if u in flag_by_url else ""
+    filtered["flags"] = filtered["slug"].map(
+        lambda s: ", ".join(flag_by_slug.get(s, [])) if s in flag_by_slug else ""
     )
 
     # Add latest ranking
@@ -124,7 +126,6 @@ if not df.empty:
     if "published_at" in display.columns:
         display["published_at"] = pd.to_datetime(display["published_at"], errors="coerce").dt.strftime("%Y-%m-%d")
 
-    # Rename for display
     display = display.rename(columns={
         "main_keyword": "Keyword",
         "url": "URL",
@@ -153,7 +154,7 @@ else:
 # --- Sidebar info ---
 with st.sidebar:
     st.markdown("### Quick Stats")
-    if gsc:
+    if latest_month:
         st.markdown(f"**GSC data:** {latest_month}")
     if rankings:
         st.markdown(f"**Rankings:** {latest_date}")

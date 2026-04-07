@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from db import fetch_audit_log, fetch_rankings, fetch_articles
+from db import fetch_audit_log, fetch_rankings, fetch_articles_enriched
 
 st.set_page_config(page_title="Audit Impact", page_icon="🔍", layout="wide")
 st.title("Audit Impact")
@@ -17,7 +17,7 @@ if not audits:
     st.stop()
 
 rankings = fetch_rankings()
-articles = fetch_articles()
+articles = fetch_articles_enriched()
 
 audit_df = pd.DataFrame(audits)
 rdf = pd.DataFrame(rankings) if rankings else pd.DataFrame()
@@ -27,9 +27,8 @@ adf = pd.DataFrame(articles) if articles else pd.DataFrame()
 results = []
 for _, audit in audit_df.iterrows():
     url = audit["url"]
-    # Get keyword for this URL
     article = adf[adf["url"] == url]
-    keyword = article.iloc[0]["main_keyword"] if not article.empty else None
+    keyword = article.iloc[0]["main_keyword"] if not article.empty and article.iloc[0].get("main_keyword") else None
 
     ranking_after = None
     if keyword and not rdf.empty:
