@@ -115,7 +115,7 @@ def fetch_flags():
     articles = fetch_articles_enriched()
 
     for a in articles:
-        if a.get("content_status") not in ("published", "new_published"):
+        if a.get("content_status") not in ("published", "published_2mo"):
             continue
         slug = a.get("slug", "")
 

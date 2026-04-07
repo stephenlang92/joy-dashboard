@@ -30,7 +30,7 @@ col1, col2, col3, col4, col5, col6 = st.columns(6)
 
 total = len(df)
 if not df.empty:
-    published = len(df[df["content_status"].isin(["published", "new_published"])])
+    published = len(df[df["content_status"].isin(["published", "published_2mo"])])
     writing = len(df[df["content_status"] == "writing"])
 else:
     published = writing = 0
@@ -71,7 +71,7 @@ with fcol1:
     all_statuses = sorted(df["content_status"].dropna().unique()) if not df.empty else []
     status_filter = st.multiselect(
         "Status", options=all_statuses,
-        default=[s for s in ["published", "new_published", "writing"] if s in all_statuses],
+        default=[s for s in ["published", "published_2mo", "writing"] if s in all_statuses],
     )
 with fcol2:
     clusters = sorted(df["topic_cluster"].dropna().unique()) if not df.empty else []
