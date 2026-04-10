@@ -110,6 +110,7 @@ if not df.empty:
         rdf = pd.DataFrame(rankings)
         latest_date = rdf["check_date"].max()
         latest = rdf[rdf["check_date"] == latest_date][["main_keyword", "position"]]
+        latest = latest.drop_duplicates(subset="main_keyword", keep="first")
         latest = latest.rename(columns={"position": "current_rank"})
         filtered = filtered.merge(latest, on="main_keyword", how="left")
     else:
@@ -124,6 +125,7 @@ if not df.empty:
             "article_slug": "slug",
             "avg_position": "gsc_position",
         })
+        gsc_latest = gsc_latest.drop_duplicates(subset="slug", keep="first")
         filtered = filtered.merge(gsc_latest, on="slug", how="left")
     else:
         filtered["clicks"] = None
@@ -137,6 +139,7 @@ if not df.empty:
         ga4_latest_month = ga4df["month"].max()
         ga4_latest = ga4df[ga4df["month"] == ga4_latest_month][["article_slug", "total_users", "sessions", "bounce_rate"]].copy()
         ga4_latest = ga4_latest.rename(columns={"article_slug": "slug"})
+        ga4_latest = ga4_latest.drop_duplicates(subset="slug", keep="first")
         filtered = filtered.merge(ga4_latest, on="slug", how="left")
     else:
         filtered["total_users"] = None
