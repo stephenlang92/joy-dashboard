@@ -27,7 +27,11 @@ adf = pd.DataFrame(articles) if articles else pd.DataFrame()
 results = []
 for _, audit in audit_df.iterrows():
     url = audit["url"]
-    article = adf[adf["url"] == url]
+    slug = audit.get("article_slug")
+    if slug:
+        article = adf[adf["slug"] == slug]
+    else:
+        article = adf[adf["url"] == url]
     keyword = article.iloc[0]["main_keyword"] if not article.empty and article.iloc[0].get("main_keyword") else None
 
     ranking_after = None

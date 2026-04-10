@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from db import fetch_gsc_monthly, fetch_articles_enriched
+from db import fetch_gsc_monthly, fetch_ga4_monthly, fetch_articles_enriched
 
 st.set_page_config(page_title="Performance", page_icon="⚡", layout="wide")
 st.title("Performance")
@@ -74,8 +74,8 @@ latest_gsc = gdf[gdf["month"] == latest_month].copy()
 latest_gsc = latest_gsc.sort_values("clicks", ascending=False)
 
 if not adf.empty:
-    slug_kw = adf[["url", "main_keyword"]].dropna(subset=["url"]).copy()
-    merged = latest_gsc.merge(slug_kw, on="url", how="left")
+    slug_kw = adf[["slug", "main_keyword"]].rename(columns={"slug": "article_slug"})
+    merged = latest_gsc.merge(slug_kw, on="article_slug", how="left")
 else:
     merged = latest_gsc.copy()
     merged["main_keyword"] = ""
@@ -114,7 +114,8 @@ quick_wins = quick_wins.sort_values("impressions", ascending=False)
 
 if not quick_wins.empty:
     if not adf.empty:
-        quick_wins = quick_wins.merge(adf[["url", "main_keyword"]], on="url", how="left")
+        slug_kw = adf[["slug", "main_keyword"]].rename(columns={"slug": "article_slug"})
+        quick_wins = quick_wins.merge(slug_kw, on="article_slug", how="left")
         quick_wins["main_keyword"] = quick_wins["main_keyword"].fillna(
             quick_wins["url"].apply(lambda u: u.rstrip("/").split("/")[-1] if u else "")
         )
@@ -156,9 +157,75 @@ low_ctr = low_ctr.sort_values("impressions", ascending=False)
 
 if not low_ctr.empty:
     if not adf.empty:
-        low_ctr = low_ctr.merge(adf[["url", "main_keyword"]], on="url", how="left")
+        slug_kw = adf[["slug", "main_keyword"]].rename(columns={"slug": "article_slug"})
+        low_ctr = low_ctr.merge(slug_kw, on="article_slug", how="left")
     display = low_ctr[["main_keyword", "url", "clicks", "impressions", "ctr", "avg_position", "top_query"]].copy()
     display["ctr"] = display["ctr"].map(lambda x: f"{x:.1%}" if x else "—")
     st.dataframe(display, use_container_width=True, hide_index=True)
 else:
     st.success("No low CTR pages detected.")
+
+st.divider()
+
+# --- GA4 User Engagement ---
+st.subheader("GA4 — User Engagement")
+
+ga4 = fetch_ga4_monthly()
+if ga4:
+    ga4df = pd.DataFrame(ga4)
+
+    # Monthly totals
+    ga4_monthly = ga4df.groupby("month").agg(
+        total_users=("total_users", "sum"),
+        sessions=("sessions", "sum"),
+        avg_bounce=("bounce_rate", "mean"),
+        pages=("url", "nunique"),
+    ).reset_index().sort_values("month")
+
+    gcol1, gcol2, gcol3 = st.columns(3)
+    ga4_latest = ga4_monthly.iloc[-1]
+    gcol1.metric("Total Users", f"{int(ga4_latest['total_users']):,}")
+    gcol2.metric("Sessions", f"{int(ga4_latest['sessions']):,}")
+    gcol3.metric("Avg Bounce Rate", f"{ga4_latest['avg_bounce']:.0%}")
+
+    # Users over time
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=ga4_monthly["month"], y=ga4_monthly["total_users"],
+        name="Users", marker_color="#FF6B35",
+    ))
+    fig.add_trace(go.Bar(
+        x=ga4_monthly["month"], y=ga4_monthly["sessions"],
+        name="Sessions", marker_color="#1A1A2E", opacity=0.3,
+    ))
+    fig.update_layout(
+        barmode="overlay",
+        title="GA4 Monthly Users & Sessions",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Top pages by engagement
+    st.subheader("Top Pages by Engagement (Latest Month)")
+    ga4_latest_month = ga4df["month"].max()
+    ga4_latest_data = ga4df[ga4df["month"] == ga4_latest_month].copy()
+    ga4_latest_data = ga4_latest_data.sort_values("total_users", ascending=False)
+
+    if not adf.empty:
+        slug_kw = adf[["slug", "main_keyword"]].rename(columns={"slug": "article_slug"})
+        ga4_latest_data = ga4_latest_data.merge(slug_kw, on="article_slug", how="left")
+        ga4_latest_data["main_keyword"] = ga4_latest_data["main_keyword"].fillna(ga4_latest_data["article_slug"])
+
+    display_ga4 = ga4_latest_data[["main_keyword", "total_users", "sessions", "avg_engagement_time", "bounce_rate"]].head(20).copy()
+    display_ga4["avg_engagement_time"] = display_ga4["avg_engagement_time"].map(lambda x: f"{x:.0f}s" if x else "—")
+    display_ga4["bounce_rate"] = display_ga4["bounce_rate"].map(lambda x: f"{x:.0%}" if x else "—")
+    display_ga4 = display_ga4.rename(columns={
+        "main_keyword": "Page",
+        "total_users": "Users",
+        "sessions": "Sessions",
+        "avg_engagement_time": "Avg Time",
+        "bounce_rate": "Bounce Rate",
+    })
+    st.dataframe(display_ga4, use_container_width=True, hide_index=True)
+else:
+    st.info("No GA4 data in database.")

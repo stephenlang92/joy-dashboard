@@ -76,8 +76,9 @@ for kw in filtered["main_keyword"].unique():
     current_pos = latest_row["position"] if latest_row is not None and pd.notna(latest_row["position"]) else None
     best_pos = kw_valid["position"].min() if not kw_valid.empty else None
 
-    # Days to first rank
-    article = adf[adf["main_keyword"] == kw]
+    # Days to first rank — match via article_slug from rankings
+    kw_slugs = filtered[filtered["main_keyword"] == kw]["article_slug"].dropna().unique()
+    article = adf[adf["slug"].isin(kw_slugs)] if len(kw_slugs) > 0 else adf[adf["main_keyword"] == kw]
     days_to_rank = None
     if not article.empty:
         pub = article.iloc[0].get("published_at")

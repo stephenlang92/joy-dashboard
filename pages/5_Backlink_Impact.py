@@ -27,7 +27,11 @@ adf = pd.DataFrame(articles) if articles else pd.DataFrame()
 results = []
 for _, bl in bl_df.iterrows():
     url = bl["target_url"]
-    article = adf[adf["url"] == url]
+    slug = bl.get("article_slug")
+    if slug:
+        article = adf[adf["slug"] == slug]
+    else:
+        article = adf[adf["url"] == url]
     keyword = article.iloc[0]["main_keyword"] if not article.empty and article.iloc[0].get("main_keyword") else None
 
     ranking_before = None

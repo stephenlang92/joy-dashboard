@@ -94,6 +94,12 @@ def fetch_rankings():
 
 
 @st.cache_data(ttl=300)
+def fetch_ga4_monthly():
+    sb = get_supabase()
+    return sb.table("ga4_monthly").select("*").order("month,url").execute().data
+
+
+@st.cache_data(ttl=300)
 def fetch_audit_log():
     sb = get_supabase()
     return sb.table("audit_log").select("*").order("audit_date", desc=True).execute().data
@@ -184,7 +190,7 @@ def fetch_flags():
             if g["month"] != latest_month:
                 continue
             if g.get("impressions", 0) > 500 and g.get("ctr", 1) < 0.02:
-                slug = _extract_slug(g["url"]) if g.get("url") else ""
+                slug = g.get("article_slug") or (_extract_slug(g["url"]) if g.get("url") else "")
                 flags.append({
                     "slug": slug,
                     "url": g["url"],
@@ -199,7 +205,7 @@ def fetch_flags():
         try:
             audit_date = datetime.strptime(audit["audit_date"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
             if 28 <= (now - audit_date).days <= 42:
-                slug = _extract_slug(audit["url"]) if audit.get("url") else ""
+                slug = audit.get("article_slug") or (_extract_slug(audit["url"]) if audit.get("url") else "")
                 flags.append({
                     "slug": slug,
                     "url": audit.get("url", ""),
